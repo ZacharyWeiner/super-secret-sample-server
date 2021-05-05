@@ -35,7 +35,10 @@ app.post('/check-win', async function (req, res, next) {
   const winHmacDigest = Base64.stringify(hmacSHA512(1 + winHashDigest, run.purse.privkey));
 
   if(hmacDigest === winHmacDigest){
-    let game = await run.load("7944ab6c5e8b926dc32b4c08e0aa5c6c2dc345435ac6c305e4c4936632901878_o2");
+    let game = await run.load("6f3e4a0a6cd30fd037ec0033fc2cfb932a9a74843951f56dc42d2ed2d20083cd_o2");
+    console.log(game.owner);
+    game.send(answers.pubKey_for_winning);
+    //game.sync();
     let data = {"winner": "YES!", "winning_hash": hmacDigest, "gameTitle": game.details.title};
     res.json(data);
   } else {
