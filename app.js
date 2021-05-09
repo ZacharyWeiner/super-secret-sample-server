@@ -11,6 +11,8 @@ const app = express()
 app.use(express.static("public"))
 app.use(cors())
 
+let gameSatoshis = 0;
+
 
 // define the first route
 app.get("/1", function (req, res) {
@@ -22,9 +24,23 @@ app.get('/products/:id', function (req, res, next) {
 
 app.post('/check-win', async function (req, res, next) {
   const run = new Run({network: "test", purse: "cQdpg2oTVvbeb47GzRxqn467RmJNp8rJzfoPMfkSBRyzqEdbJcSz", owner: 'cTQPGSZiCXQD3UmrF4rKE6Gub3tmjYYvrjspU7BhXCYbg5f2r7AW', trust: "*"})
-  console.log(req);
+  //console.log(req);
+  let game = await run.load("ffbd504e96bee30ce4f9d8d4555df1ebc68133924b797358b0a1e7d182613cbe_o2");
   const answers = await run.load(req.query.location);
+  await game.sync();
+  let newGameLocation = 
+  await answers.sync();
+  console.log("Game Owner:", game.owner);
   console.log("Answers Owner:", answers.owner);
+  let tx = new Run.Transaction();
+  tx.update(() => answers.withdraw())
+  tx.update(() => game.fund(1250))
+  await tx.publish();
+  await answers.sync();
+  game = await run.load("ffbd504e96bee30ce4f9d8d4555df1ebc68133924b797358b0a1e7d182613cbe_o2");
+  await game.sync();
+  console.log("Answers Balance", answers.satoshis);
+  console.log("Game Balance", game.satoshis);
   let toHash = answers.answers[0] + answers.answers[1] + answers.answers[2];
   console.log(toHash);
   const hashDigest = SHA256(toHash);
@@ -33,12 +49,10 @@ app.post('/check-win', async function (req, res, next) {
   let hashWin = "alwayseverywehre but here sucks anywayboat";
   const winHashDigest = SHA256(hashWin);
   const winHmacDigest = Base64.stringify(hmacSHA512(1 + winHashDigest, run.purse.privkey));
-
   if(hmacDigest === winHmacDigest){
-    let game = await run.load("6f3e4a0a6cd30fd037ec0033fc2cfb932a9a74843951f56dc42d2ed2d20083cd_o2");
     console.log(game.owner);
     game.send(answers.pubKey_for_winning);
-    //game.sync();
+    game.sync();
     let data = {"winner": "YES!", "winning_hash": hmacDigest, "gameTitle": game.details.title};
     res.json(data);
   } else {
