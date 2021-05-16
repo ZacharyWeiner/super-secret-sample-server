@@ -6,7 +6,6 @@ var hmacSHA512 = require("crypto-js/hmac-sha512");
 var Base64 = require("crypto-js/enc-base64");
 var cors = require('cors')
 const app = express()
-
 // use the express-static middleware
 app.use(express.static("public"))
 app.use(cors())
@@ -24,41 +23,55 @@ app.get('/products/:id', function (req, res, next) {
 
 app.post('/check-win', async function (req, res, next) {
   const run = new Run({network: "test", purse: "cQdpg2oTVvbeb47GzRxqn467RmJNp8rJzfoPMfkSBRyzqEdbJcSz", owner: 'cTQPGSZiCXQD3UmrF4rKE6Gub3tmjYYvrjspU7BhXCYbg5f2r7AW', trust: "*"})
-  //console.log(req);
-  let game = await run.load("ffbd504e96bee30ce4f9d8d4555df1ebc68133924b797358b0a1e7d182613cbe_o2");
+  console.log(req.query.location, req.query.gameId);
   const answers = await run.load(req.query.location);
-  await game.sync();
-  let newGameLocation = 
-  await answers.sync();
+  const game = await run.load(req.query.gameId);
+  try{
+    await game.sync();
+    await answers.sync();
+  }catch(err){
+    res.json(err);
+  }
   console.log("Game Owner:", game.owner);
   console.log("Answers Owner:", answers.owner);
+  console.log("Answers Game:", answers.gameId);
   let tx = new Run.Transaction();
-  tx.update(() => answers.withdraw())
-  tx.update(() => game.fund(1250))
-  await tx.publish();
-  await answers.sync();
-  game = await run.load("ffbd504e96bee30ce4f9d8d4555df1ebc68133924b797358b0a1e7d182613cbe_o2");
-  await game.sync();
-  console.log("Answers Balance", answers.satoshis);
-  console.log("Game Balance", game.satoshis);
-  let toHash = answers.answers[0] + answers.answers[1] + answers.answers[2];
-  console.log(toHash);
-  const hashDigest = SHA256(toHash);
-  const hmacDigest = Base64.stringify(hmacSHA512(1 + hashDigest, run.purse.privkey));
-
-  let hashWin = "alwayseverywehre but here sucks anywayboat";
-  const winHashDigest = SHA256(hashWin);
-  const winHmacDigest = Base64.stringify(hmacSHA512(1 + winHashDigest, run.purse.privkey));
-  if(hmacDigest === winHmacDigest){
-    console.log(game.owner);
-    game.send(answers.pubKey_for_winning);
-    game.sync();
-    let data = {"winner": "YES!", "winning_hash": hmacDigest, "gameTitle": game.details.title};
-    res.json(data);
-  } else {
-    res.json({"winner": "no"})
-  }
-})
+  tx.update(() => answers.check())
+  let toFund = Math.round(game.satoshisForPlay / 2);
+  console.log("To Fund:", game.satoshisForPlay, toFund)
+  tx.update(() => game.fund(toFund))
+  try {
+   await tx.publish();
+   await answers.sync();
+   await game.sync();
+   console.log("Answers Balance", answers.satoshis);
+   console.log("Game Balance", game.satoshis);
+   let toHash = answers.answers[0] + answers.answers[1]   + answers.answers[2]  + answers.answers[3]  + answers.answers[4];
+   const hashDigest = SHA256(toHash);
+   const hmacDigest = Base64.stringify(hmacSHA512(1 + hashDigest, run.purse.privkey));
+   console.log("toHash, ", toHash, "hashDigest: ", hashDigest, ", hmacDigest: ", hmacDigest, game.winningHash);
+   answers.resetOwner()
+   await answers.sync()
+   console.log("Answers Owner:", answers.owner);
+   let hashWin = game.winningHash;
+      // const winHashDigest = SHA256(hashWin);
+      // const winHmacDigest = Base64.stringify(hmacSHA512(1 + winHashDigest, run.purse.privkey));
+      if(hmacDigest.toString() === hashWin.toString()){
+        console.log("Winning Play!", game.owner);
+        let toWin = await run.load(game.location);
+        await toWin.sync();
+        toWin.win(answers.address_for_winning);
+        await game.sync();
+        let data = {"winner": "YES!", "winning_hash": hmacDigest, "gameTitle": game.details.title};
+        res.json(data);
+      } else {
+        res.json({"winner": "no"})
+      }
+    } catch(err) {
+      res.json(err);
+    }
+    return res;
+  })
 
 // start the server listening for requests
 app.listen(process.env.PORT || 3000, 
