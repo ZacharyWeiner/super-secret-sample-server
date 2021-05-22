@@ -12,6 +12,7 @@
   "dependencies": {
     "cors": "^2.8.5",
     "crypto-js": "^4.0.0",
+    "dotenv": "^9.0.2",
     "express": "^4.17.1",
     "run-sdk": "^0.6.21"
   }
